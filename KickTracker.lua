@@ -48,6 +48,7 @@ local FRAME_WIDTH = 170
 local ROW_HEIGHT = 14
 local HEADER_HEIGHT = 14
 local menuOpen = false
+local testDataActive = false
 
 -- Saved settings (persisted via SavedVariables)
 local defaults = {
@@ -361,6 +362,13 @@ local function ToggleMenu()
     if menuFrame and menuFrame:IsShown() then
         menuFrame:Hide()
         menuOpen = false
+        -- Clear test data and restore real group
+        if testDataActive then
+            testDataActive = false
+            wipe(activeKicks)
+            wipe(partyMembers)
+            ScanGroup()
+        end
         return
     end
 
@@ -368,7 +376,7 @@ local function ToggleMenu()
 
     if not menuFrame then
         menuFrame = CreateFrame("Frame", "KickTrackerMenu", UIParent, "BackdropTemplate")
-        menuFrame:SetSize(160, 245)
+        menuFrame:SetSize(160, 230)
         menuFrame:SetFrameStrata("DIALOG")
         menuFrame:SetClampedToScreen(true)
         menuFrame:SetMovable(true)
@@ -447,37 +455,23 @@ local function ToggleMenu()
             activeKicks["Thrall"]  = { spellID = 57994, icon = 136018,  expires = now + 12, cd = 12, class = "SHAMAN" }
             activeKicks["Jaina"]   = { spellID = 2139,  icon = 135856,  expires = now + 20, cd = 24, class = "MAGE" }
             activeKicks["Garrosh"] = { spellID = 6552,  icon = 132938,  expires = now + 5,  cd = 15, class = "WARRIOR" }
+            testDataActive = true
             print("|cffcc8800KT:|r Test data loaded.")
         end)
 
-        -- Show macros
-        CreateMenuButton(menuFrame, -96, "Show Macros", function()
-            print("|cffcc8800KT macros:|r")
-            print("|cff00ff00Pummel:|r /cast Pummel\\n/p kt:6552")
-            print("|cff00ff00Kick:|r /cast Kick\\n/p kt:1766")
-            print("|cff00ff00Counterspell:|r /cast Counterspell\\n/p kt:2139")
-            print("|cff00ff00Wind Shear:|r /cast Wind Shear\\n/p kt:57994")
-            print("|cff00ff00Skull Bash:|r /cast Skull Bash\\n/p kt:106839")
-            print("|cff00ff00Mind Freeze:|r /cast Mind Freeze\\n/p kt:47528")
-            print("|cff00ff00Rebuke:|r /cast Rebuke\\n/p kt:96231")
-            print("|cff00ff00Disrupt:|r /cast Disrupt\\n/p kt:183752")
-            print("|cff00ff00Spear Hand Strike:|r /cast Spear Hand Strike\\n/p kt:116705")
-            print("|cff00ff00Muzzle:|r /cast Muzzle\\n/p kt:187707")
-        end)
-
         -- Dato <3
-        CreateMenuButton(menuFrame, -118, "|cffff6688<3 dato|r", function()
+        CreateMenuButton(menuFrame, -96, "|cffff6688<3 dato|r", function()
             SendChatMessage("<3", "SAY")
         end)
 
         local sep2 = menuFrame:CreateTexture(nil, "ARTWORK")
-        sep2:SetPoint("TOPLEFT", 8, -140)
-        sep2:SetPoint("TOPRIGHT", -8, -140)
+        sep2:SetPoint("TOPLEFT", 8, -118)
+        sep2:SetPoint("TOPRIGHT", -8, -118)
         sep2:SetHeight(1)
         sep2:SetColorTexture(0.3, 0.3, 0.35, 0.5)
 
         -- Opacity slider
-        CreateSlider(menuFrame, -148, "Opacity", 0.15, 1.0, 0.05,
+        CreateSlider(menuFrame, -126, "Opacity", 0.15, 1.0, 0.05,
             function() return settings.opacity end,
             function(v)
                 settings.opacity = v
@@ -486,7 +480,7 @@ local function ToggleMenu()
         )
 
         -- Scale slider
-        CreateSlider(menuFrame, -183, "Scale", 0.5, 2.0, 0.05,
+        CreateSlider(menuFrame, -161, "Scale", 0.5, 2.0, 0.05,
             function() return settings.scale end,
             function(v)
                 settings.scale = v
@@ -497,7 +491,7 @@ local function ToggleMenu()
         -- Width slider
         local widthContainer = CreateFrame("Frame", nil, menuFrame)
         widthContainer:SetSize(140, 30)
-        widthContainer:SetPoint("TOP", menuFrame, "TOP", 0, -218)
+        widthContainer:SetPoint("TOP", menuFrame, "TOP", 0, -196)
 
         local wText = widthContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         wText:SetPoint("TOP", 0, 0)
@@ -599,10 +593,6 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 eventFrame:RegisterEvent("CHAT_MSG_ADDON")
-eventFrame:RegisterEvent("CHAT_MSG_PARTY")
-eventFrame:RegisterEvent("CHAT_MSG_PARTY_LEADER")
-eventFrame:RegisterEvent("CHAT_MSG_RAID")
-eventFrame:RegisterEvent("CHAT_MSG_RAID_LEADER")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
@@ -656,7 +646,18 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         menuBtn:SetScript("OnEnter", function(self) self.text:SetText("|cffcc8800=|r") end)
         menuBtn:SetScript("OnLeave", function(self) self.text:SetText("|cff888888=|r") end)
 
-        -- No dragging on the bar
+        -- Dragging (only when menu is open)
+        mainFrame:SetScript("OnMouseDown", function(self, button)
+            if button == "LeftButton" and menuOpen then
+                self:SetMovable(true)
+                self:StartMoving()
+            end
+        end)
+        mainFrame:SetScript("OnMouseUp", function(self)
+            self:StopMovingOrSizing()
+            self:SetMovable(false)
+            SavePosition()
+        end)
 
         -- Resize handle
         CreateResizeHandle(mainFrame)
@@ -706,40 +707,6 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
 
-    elseif event == "CHAT_MSG_PARTY" or event == "CHAT_MSG_PARTY_LEADER"
-        or event == "CHAT_MSG_RAID" or event == "CHAT_MSG_RAID_LEADER" then
-        if not mainFrame then return end
-        local msg, sender = ...
-        local spellStr = msg:match("^kt:(%d+)$")
-        if spellStr then
-            local spellID = tonumber(spellStr)
-            if spellID and INTERRUPTS[spellID] then
-                local senderShort = sender:match("^([^%-]+)") or sender
-                local myName = UnitName("player")
-                if senderShort ~= myName then
-                    local class = nil
-                    for i = 1, 4 do
-                        local pname = UnitName("party" .. i)
-                        if pname == senderShort then
-                            local _, c = UnitClass("party" .. i)
-                            class = c
-                            break
-                        end
-                    end
-                    if not class and IsInRaid() then
-                        for i = 1, 40 do
-                            local pname = UnitName("raid" .. i)
-                            if pname == senderShort then
-                                local _, c = UnitClass("raid" .. i)
-                                class = c
-                                break
-                            end
-                        end
-                    end
-                    TrackKick(senderShort, class or INTERRUPTS[spellID].class, spellID)
-                end
-            end
-        end
     end
 end)
 
