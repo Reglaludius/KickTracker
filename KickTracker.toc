@@ -1,0 +1,8 @@
+## Interface: 120001
+## Title: KickTracker
+## Notes: Tracks interrupt cooldowns for your party/raid members
+## Author: Tengi
+## Version: 2.0.0
+## SavedVariables: KickTrackerDB
+
+KickTracker.lua
